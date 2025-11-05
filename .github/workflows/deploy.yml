@@ -1,0 +1,113 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+env:
+  NODE_VERSION: "20.x"
+
+jobs:
+  check-trigger:
+    runs-on: self-hosted
+    outputs:
+      should_deploy: ${{ steps.evaluate.outputs.should_deploy }}
+
+    steps:
+      - name: Evaluate deployment trigger
+        id: evaluate
+        run: |
+          COMMIT_MESSAGE="${{ github.event.head_commit.message }}"
+
+          if echo "$COMMIT_MESSAGE" | grep -qi "\[deploy\]"; then
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    runs-on: self-hosted
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_deploy == 'true'
+
+    steps:
+      - name: Checkout repository
+        run: |
+          cd ~/crs
+          # Force sync with remote, discard local changes
+          git fetch origin
+          git reset --hard origin/main
+          git clean -fdx
+
+      - name: Validate build artifacts
+        run: |
+          cd ~/crs
+          test -d dist || exit 1
+          test -d dist/dashboard/.next/server || exit 1
+          test -f dist/server/main.js || exit 1
+          test -d prisma/migrations || exit 1
+          test -f prisma/schema.prisma || exit 1
+          test -f ecosystem.config.js || exit 1
+
+      - name: Configure environment
+        run: |
+          cd ~/crs
+          if [ ! -f .env ]; then
+            echo "NODE_ENV=production" >> .env
+            echo "POSTGRES_HOST=localhost" >> .env
+            echo "POSTGRES_PORT=5432" >> .env
+            echo "POSTGRES_USER=${{ secrets.POSTGRES_USER }}" >> .env
+            echo "POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}" >> .env
+            echo "POSTGRES_DB=${{ secrets.POSTGRES_DB }}" >> .env
+            echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> .env
+            echo "SEED_PASSWORD=${{ secrets.SEED_PASSWORD }}" >> .env
+          fi
+
+      - name: Install production dependencies
+        run: |
+          cd ~/crs
+          npm ci --omit=dev --prefer-offline
+
+      - name: Create database backup
+        run: |
+          BACKUP_DIR="$HOME/backups"
+          mkdir -p "$BACKUP_DIR"
+          
+          TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+          BACKUP_FILE="$BACKUP_DIR/db_${TIMESTAMP}.sql"
+          
+          if pg_dump "${{ secrets.DATABASE_URL }}" > "$BACKUP_FILE"; then
+            gzip "$BACKUP_FILE"
+            ls -t "$BACKUP_DIR"/*.gz | tail -n +11 | xargs -r rm
+          fi
+        continue-on-error: true
+
+      - name: Execute database migrations
+        run: |
+          cd ~/crs
+          npx prisma migrate deploy
+        timeout-minutes: 5
+
+      - name: Verify migration status
+        run: |
+          cd ~/crs
+          npx prisma migrate status
+
+      - name: Deploy application services
+        run: |
+          cd ~/crs
+          if npx pm2 list | grep -q "dashboard\|server"; then
+            npx pm2 reload ecosystem.config.js --update-env
+          else
+            npx pm2 start ecosystem.config.js
+          fi
+          npx pm2 save
+        timeout-minutes: 5
+
+      - name: Execute health checks
+        run: |
+          curl -f --max-time 10 http://localhost:4200 || true
+          curl -f --max-time 10 http://localhost:3000 || true
+        continue-on-error: true
+
+
