@@ -1,10 +1,16 @@
+const path = require('path');
+const os = require('os');
+
+const HOME_DIR = os.homedir();
+const BASE_DIR = path.join(HOME_DIR, 'crs');
+
 module.exports = {
   apps: [
     {
       name: 'dashboard',
       script: 'node_modules/.bin/next',
-      args: 'start dist/dashboard -p 4200',
-      cwd: process.cwd(),
+      args: 'start -p 4200',
+      cwd: path.join(BASE_DIR, 'dist/dashboard'), 
       instances: 2,
       exec_mode: 'cluster',
       env: {
@@ -24,8 +30,8 @@ module.exports = {
     },
     {
       name: 'server',
-      script: 'dist/server/main.js',
-      cwd: process.cwd(),
+      script: path.join(BASE_DIR, 'dist/server/main.js'),
+      cwd: BASE_DIR,  
       instances: 1,
       exec_mode: 'fork',
       env: {
