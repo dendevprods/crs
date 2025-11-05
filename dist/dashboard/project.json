@@ -1,0 +1,50 @@
+{
+  "name": "dashboard",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "dashboard/src",
+  "projectType": "application",
+  "tags": [],
+  "targets": {
+    "build": {
+      "executor": "@nx/next:build",
+      "outputs": [
+        "{options.outputPath}"
+      ],
+      "options": {
+        "outputPath": "dist/dashboard",
+        "root": "dashboard/src",
+        "sourceRoot": "dashboard/src"
+      },
+      "configurations": {
+        "production": {
+          "dev": false
+        }
+      }
+    },
+    "serve": {
+      "executor": "@nx/next:server",
+      "options": {
+        "buildTarget": "dashboard:build",
+        "dev": true,
+        "root": "dashboard/src"
+      },
+      "configurations": {
+        "production": {
+          "buildTarget": "dashboard:build:production",
+          "dev": false
+        }
+      }
+    },
+    "lint": {
+      "executor": "@nx/linter:eslint",
+      "outputs": [
+        "{options.outputFile}"
+      ],
+      "options": {
+        "lintFilePatterns": [
+          "dashboard/**/*.{ts,tsx,js,jsx}"
+        ]
+      }
+    }
+  }
+}

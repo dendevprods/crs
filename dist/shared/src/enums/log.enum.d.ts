@@ -1,0 +1,12 @@
+export declare enum LOG_ACTION {
+    CREATE = "CREATE",
+    UPDATE = "UPDATE",
+    DELETE = "DELETE",
+    UPDATE_STATE = "UPDATE_STATE",
+    ASSIGN = "ASSIGN",
+    UNASSIGN = "UNASSIGN",
+    ADD = "ADD",
+    EDIT = "EDIT",
+    CHANGE_STATUS = "CHANGE_STATUS",
+    MARK_DONE = "MARK_DONE"
+}
