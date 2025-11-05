@@ -1,0 +1,316 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+// generator erd {
+//   provider = "prisma-erd-generator"
+// }
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Client {
+  id        Int        @id @default(autoincrement())
+  type      ClientType
+  personId  Int?       @unique
+  companyId Int?       @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  tickets   Ticket[]
+  company   Company?   @relation("ClientCompany", fields: [companyId], references: [id])
+  person    Person?    @relation("ClientPerson", fields: [personId], references: [id])
+
+  @@map("clients")
+}
+
+model Person {
+  id        Int      @id @default(autoincrement())
+  fullName  String
+  phone     String?
+  email     String?
+  address   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  representatives CompanyRepresentative[]
+  client          Client?                 @relation("ClientPerson")
+
+  @@map("persons")
+}
+
+model CompanyRepresentative {
+  personId  Int
+  companyId Int
+
+  person  Person  @relation(fields: [personId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+
+  tickets Ticket[] @relation("TicketRepresentative")
+
+  @@id([personId, companyId])
+  @@map("company_representatives")
+}
+
+model Company {
+  id              Int                     @id @default(autoincrement())
+  name            String
+  taxId           String?
+  headquarters    String?
+  email           String?
+  phone           String?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  client          Client?                 @relation("ClientCompany")
+  representatives CompanyRepresentative[]
+
+  @@map("companies")
+}
+
+model Department {
+  id          Int        @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  employees   Employee[]
+
+  @@map("departments")
+}
+
+model EmployeeRole {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique
+  description String?
+  createdAt   DateTime   @default(now())
+  employees   Employee[]
+
+  @@map("employee_roles")
+}
+
+model Employee {
+  id           Int      @id @default(autoincrement())
+  fullName     String
+  email        String?
+  phone        String?
+  roleId       Int?
+  departmentId Int?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  role       EmployeeRole? @relation(fields: [roleId], references: [id])
+  department Department?   @relation(fields: [departmentId], references: [id])
+
+  tasks          Task[]
+  ticketComments TicketComment[]
+  taskComments   TaskComment[]
+  tickets        Ticket[]        @relation("TicketEmployees")
+  activityLogs   ActivityLog[]
+
+  @@map("employees")
+}
+
+model Ticket {
+  id                      Int           @id @default(autoincrement())
+  equipmentDescription    String
+  imageUrl                String?
+  priority                OrderPriority @default(NORMAL)
+  submittedAt             DateTime      @default(now())
+  clientId                Int
+  personRepresentativeId  Int?
+  companyRepresentativeId Int?
+  status                  OrderStatus   @default(NEW)
+  estimatedCost           Float         @default(0)
+  finalCost               Float         @default(0)
+
+  ticketItems  TicketItem[]
+  comments     TicketComment[]
+  tasks        Task[]
+  activityLogs ActivityLog[]
+
+  estimatedDeliveryDate  DateTime?
+  estimatedExecutionTime Int?
+  observations           String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client         Client                 @relation(fields: [clientId], references: [id])
+  representative CompanyRepresentative? @relation("TicketRepresentative", fields: [personRepresentativeId, companyRepresentativeId], references: [personId, companyId])
+  employees      Employee[]             @relation("TicketEmployees")
+
+  @@map("tickets")
+}
+
+model TicketItem {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  type      ItemType
+  productId Int?
+  serviceId Int?
+  quantity  Int      @default(1)
+  unitPrice Float
+  totalCost Float    @default(0)
+
+  ticket  Ticket   @relation(fields: [ticketId], references: [id])
+  product Product? @relation(fields: [productId], references: [id])
+  service Service? @relation(fields: [serviceId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([id, ticketId])
+  @@index([productId])
+  @@index([serviceId])
+  @@map("ticket_items")
+}
+
+enum ItemType {
+  PRODUCT
+  SERVICE
+}
+
+model Task {
+  id          Int        @id @default(autoincrement())
+  ticketId    Int
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  dueDate     DateTime?
+
+  assigneeId Int?
+  assignee   Employee? @relation(fields: [assigneeId], references: [id])
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  taskComments TaskComment[]
+  ticket       Ticket        @relation(fields: [ticketId], references: [id])
+
+  @@map("tasks")
+}
+
+model TicketComment {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int
+  text      String
+  createdAt DateTime @default(now())
+  authorId  Int
+
+  ticket Ticket   @relation(fields: [ticketId], references: [id])
+  author Employee @relation(fields: [authorId], references: [id])
+
+  @@map("ticket_comments")
+}
+
+model TaskComment {
+  id        Int      @id @default(autoincrement())
+  taskId    Int
+  text      String
+  createdAt DateTime @default(now())
+  authorId  Int
+
+  task   Task     @relation(fields: [taskId], references: [id])
+  author Employee @relation(fields: [authorId], references: [id])
+
+  @@map("task_comments")
+}
+
+model ActivityLog {
+  id        Int      @id @default(autoincrement())
+  ticketId  Int?
+  entity    String
+  entityId  Int?
+  action    String
+  details   Json?
+  authorId  Int?
+  createdAt DateTime @default(now())
+
+  author Employee? @relation(fields: [authorId], references: [id])
+  ticket Ticket?   @relation(fields: [ticketId], references: [id])
+
+  @@index([ticketId])
+  @@index([entity, entityId])
+  @@map("activity_logs")
+}
+
+model Product {
+  id Int @id @default(autoincrement())
+
+  productCode  String?       @unique
+  name         String
+  description  String?
+  category     String
+  quantity     Int?          @default(0)
+  unitPrice    Float?
+  entryDate    DateTime
+  supplier     String?
+  status       ProductStatus
+  weight       Float?
+  observations String?
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  serialNumber String?  @unique
+
+  ticketItems TicketItem[]
+
+  @@map("products")
+}
+
+model Service {
+  id Int @id @default(autoincrement())
+
+  serviceCode  String? @unique
+  name         String
+  description  String?
+  price        Float
+  duration     Int?
+  observations String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  ticketItems TicketItem[]
+
+  @@map("services")
+}
+
+enum OrderStatus {
+  NEW
+  TAKEN
+  IN_PROGRESS
+  APPROVED
+  IN_TESTING
+  COMPLETED
+  CONTACT_CLIENT
+  WAITING_CLIENT
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderPriority {
+  NORMAL
+  URGENT
+}
+
+enum ClientType {
+  PERSON
+  COMPANY
+}
+
+enum ProductStatus {
+  AVAILABLE
+  UNAVAILABLE
+  DEPLETED
+  ON_ORDER
+  DEFECTIVE
+}
+
+enum TaskStatus {
+  TODO
+  COMPLETED
+}
