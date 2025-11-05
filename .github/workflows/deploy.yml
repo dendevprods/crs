@@ -104,10 +104,4 @@ jobs:
           npx pm2 save
         timeout-minutes: 5
 
-      - name: Execute health checks
-        run: |
-          curl -f --max-time 10 http://localhost:4200 || true
-          curl -f --max-time 10 http://localhost:3000 || true
-        continue-on-error: true
-
 
